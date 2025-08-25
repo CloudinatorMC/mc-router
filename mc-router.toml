@@ -1,0 +1,14 @@
+# Example configuration for mc-router
+# Address the proxy listens on
+listen = "0.0.0.0:25565"
+
+# Optional default backend if nothing matched
+default = "127.0.0.1:25566"
+
+# Route keys map the server address string the client enters (lowercased)
+# to a backend host:port.
+[routes]
+"lobby.example.com" = "127.0.0.1:25566"
+"survival.example.com" = "127.0.0.1:25567"
+# prefix sample (client enters "mini-01.example.com")
+"mini-" = "127.0.0.1:25568"
