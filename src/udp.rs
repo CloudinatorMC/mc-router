@@ -23,16 +23,13 @@ pub async fn spawn_udp_forwarder(
                     continue;
                 }
             };
-            let backend = {
-                // Determine backend via IP mapping else default.
-                if let Some(b) = udp_client_map.read().await.get(&src.ip()).cloned() {
-                    Some(b)
-                } else {
-                    let g = cfg.read().await;
-                    g.default.clone()
-                }
+            let backend_addr_opt = if let Some(b) = udp_client_map.read().await.get(&src.ip()).cloned() {
+                Some(b)
+            } else {
+                let g = cfg.read().await;
+                g.default.as_ref().map(|d| d.address.clone())
             };
-            let Some(backend) = backend else { continue }; // Drop if no mapping/default.
+            let Some(backend) = backend_addr_opt else { continue }; // Drop if no mapping/default.
             let data = buf[..len].to_vec();
             let sock_clone = sock.clone();
             tokio::spawn(async move {

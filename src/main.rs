@@ -5,7 +5,6 @@
 //!
 //! Supports only modern (VarInt-based) handshake up to the point of deciding
 //! which backend to connect; afterwards it just pipes bytes in both directions.
-//! No encryption / compression handling is performed (act as a plain TCP hop).
 
 use anyhow::{anyhow, Result, Context};
 use std::{collections::HashMap, net::{IpAddr, SocketAddr}, sync::Arc};
@@ -74,9 +73,10 @@ async fn handle_client(
         info!(original=%server_addr_raw, sanitized=%server_addr_lc, "sanitized server address");
     }
     let cfg_guard = cfg.read().await;
-    let backend = route_backend(&server_addr_lc, &cfg_guard)
+    let backend_cfg = route_backend(&server_addr_lc, &cfg_guard)
         .ok_or_else(|| anyhow!("no route for {server_addr_raw}"))?;
-    info!(client=%peer, requested=%server_addr_raw, backend=%backend, "routing");
+    let backend = &backend_cfg.address;
+    info!(client=%peer, requested=%server_addr_raw, backend=%backend, haproxy=%backend_cfg.use_haproxy, "routing");
 
     // Record mapping from client IP -> backend for later UDP forwarding (best-effort).
     {
@@ -85,6 +85,29 @@ async fn handle_client(
     }
 
     let mut outbound = TcpStream::connect(&backend).await?;
+    // If HAProxy PROXY protocol v1 is enabled, send header first.
+    if backend_cfg.use_haproxy {
+        // Determine address family and format accordingly (only TCP4/TCP6 supported here).
+        let client_ip = peer.ip();
+        let local_ip = outbound.local_addr()?.ip();
+        let fam = match (client_ip, local_ip) {
+            (std::net::IpAddr::V4(_), std::net::IpAddr::V4(_)) => "TCP4",
+            (std::net::IpAddr::V6(_), std::net::IpAddr::V6(_)) => "TCP6",
+            _ => "UNKNOWN", // mixed family - spec permits using UNKNOWN which omits addresses
+        };
+        let header = if fam == "UNKNOWN" {
+            format!("PROXY UNKNOWN\r\n")
+        } else {
+            format!(
+                "PROXY {fam} {} {} {} {}\r\n",
+                client_ip,
+                local_ip,
+                peer.port(),
+                outbound.local_addr()?.port()
+            )
+        };
+        outbound.write_all(header.as_bytes()).await?;
+    }
     // Write the handshake we consumed to outbound first, preserving transparency.
     outbound.write_all(&buf).await?;
 
@@ -114,9 +137,9 @@ mod tests {
 
     #[test]
     fn test_route_default_used() {
-        let cfg = Config { listen: "0.0.0.0:0".into(), routes: HashMap::new(), default: Some("127.0.0.1:12345".into()) };
-        let b = route_backend("unknown.example", &cfg);
-        assert_eq!(b.as_deref(), Some("127.0.0.1:12345"));
+    let cfg = Config { listen: "0.0.0.0:0".into(), routes: HashMap::new(), default: Some(config::BackendConfig { address: "127.0.0.1:12345".into(), use_haproxy: false }) };
+    let b = route_backend("unknown.example", &cfg).map(|b| &b.address);
+    assert_eq!(b, Some(&"127.0.0.1:12345".to_string()));
     }
 
     #[test]

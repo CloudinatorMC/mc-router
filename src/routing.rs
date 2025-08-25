@@ -1,10 +1,10 @@
-use crate::config::Config;
+use crate::config::{Config, BackendConfig};
 
-pub fn route_backend(requested: &str, cfg: &Config) -> Option<String> {
+pub fn route_backend<'a>(requested: &str, cfg: &'a Config) -> Option<&'a BackendConfig> {
     // Exact match first
-    if let Some(t) = cfg.routes.get(requested) { return Some(t.clone()); }
-    // Prefix match (e.g., "mini-" matches entries) choose the longest matched key.
-    let mut best: Option<(&String, &String)> = None;
+    if let Some(t) = cfg.routes.get(requested) { return Some(t); }
+    // Prefix match choose the longest matched key.
+    let mut best: Option<(&String, &BackendConfig)> = None;
     for (k, v) in &cfg.routes {
         if requested.starts_with(k) {
             if let Some((bk, _)) = &best {
@@ -12,8 +12,8 @@ pub fn route_backend(requested: &str, cfg: &Config) -> Option<String> {
             } else { best = Some((k, v)); }
         }
     }
-    if let Some((_, v)) = best { return Some(v.clone()); }
-    if let Some(d) = &cfg.default { return Some(d.clone()); }
+    if let Some((_, v)) = best { return Some(v); }
+    if let Some(d) = &cfg.default { return Some(d); }
     None
 }
 

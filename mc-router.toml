@@ -1,14 +1,24 @@
-# Example configuration for mc-router
-# Address the proxy listens on
+## Example configuration for mc-router
+## Address the proxy listens on
 listen = "0.0.0.0:25565"
 
-# Optional default backend if nothing matched
-default = "127.0.0.1:25566"
+## Optional default backend if nothing matched.
+## Can be either a simple string or a table with options.
+# default = "127.0.0.1:25566"
+default = { address = "127.0.0.1:25566", useHAProxy = true }
 
-# Route keys map the server address string the client enters (lowercased)
-# to a backend host:port.
+## Route keys map the server address string the client enters (lowercased)
+## to a backend plus optional per-backend options.
+## You may mix simple and detailed forms.
 [routes]
 "lobby.example.com" = "127.0.0.1:25566"
-"survival.example.com" = "127.0.0.1:25567"
-# prefix sample (client enters "mini-01.example.com")
-"mini-" = "127.0.0.1:25568"
+"survival.example.com" = { address = "127.0.0.1:25567", useHAProxy = false }
+## Prefix sample (client enters "mini-01.example.com")
+"mini-" = { address = "127.0.0.1:25568" }
+
+## Field: useHAProxy
+## When true, the proxy sends an initial HAProxy PROXY protocol v1 header line (e.g.,
+##   PROXY TCP4 <client-ip> <proxy-ip> <client-port> <proxy-port>\r\n
+## before the original Minecraft handshake packet. Enable this only if the
+## backend server (or another proxy like Velocity / Bungee / Paper with a plugin)
+## is configured to expect and trust the PROXY protocol.
