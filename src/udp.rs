@@ -1,5 +1,4 @@
 use crate::config::Config;
-use crate::routing::route_backend; // might be useful later
 use anyhow::Result;
 use std::{collections::HashMap, net::IpAddr, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{net::UdpSocket, sync::RwLock};

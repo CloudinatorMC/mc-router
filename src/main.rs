@@ -1,3 +1,4 @@
+//! CloudinatorMC - mc-router
 //! Very small experimental Minecraft handshake-routing TCP proxy.
 //! It inspects the initial Minecraft handshake to extract the 'server address'
 //! (the string the client typed into multiplayer) and uses simple prefix / exact
@@ -20,11 +21,31 @@ use config::Config;
 use protocol::{parse_handshake_server_address, read_framed_packet};
 use routing::{route_backend, sanitize_address};
 use udp::spawn_udp_forwarder;
+use std::env;
+use ed25519_dalek::PublicKey;
+use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
+use base64::Engine as _;
+mod control_plane;
+use control_plane::ControlPlaneClient;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     init_tracing();
     let cfg = Arc::new(RwLock::new(Config::load(None)?));
+    // Optionally start control-plane poller if env vars provided
+    if let (Ok(base), Ok(rid), Ok(pubkey_b64)) = (env::var("CONTROL_PLANE_URL"), env::var("ROUTER_ID"), env::var("CONTROL_PLANE_PUBKEY")) {
+        if let Ok(pk_bytes) = BASE64_ENGINE.decode(pubkey_b64.as_bytes()) {
+            if let Ok(pubkey) = PublicKey::from_bytes(&pk_bytes) {
+                let cp = ControlPlaneClient::new(base, rid, pubkey);
+                let cp_cfg = cfg.clone();
+                tokio::spawn(async move {
+                    if let Err(e) = cp.poll_loop(cp_cfg).await {
+                        tracing::error!(error=%e, "control plane poller failed");
+                    }
+                });
+            } else { warn!("invalid CONTROL_PLANE_PUBKEY bytes"); }
+        } else { warn!("failed decoding CONTROL_PLANE_PUBKEY base64"); }
+    }
     let listen_addr = cfg.read().await.listen.clone();
     let udp_client_map: Arc<RwLock<HashMap<IpAddr, String>>> = Arc::new(RwLock::new(HashMap::new()));
 
