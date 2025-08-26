@@ -114,6 +114,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fd1289c04a9ea8cb22300a459a72a385d7c73d3259e2ed7dcb2af674838cfa9"
 
 [[package]]
+name = "config-service-lib"
+version = "0.1.0"
+source = "git+https://github.com/CloudinatorMC/config-service-lib#8e45d33c1d16d6a6bd9b1041ac72485d90fd0c6f"
+dependencies = [
+ "anyhow",
+ "base64",
+ "ed25519-dalek",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "core-foundation"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -659,8 +676,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "base64",
+ "config-service-lib",
  "ed25519-dalek",
- "reqwest",
  "serde",
  "serde_json",
  "tokio",

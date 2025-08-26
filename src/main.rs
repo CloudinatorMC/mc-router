@@ -25,26 +25,59 @@ use std::env;
 use ed25519_dalek::PublicKey;
 use base64::engine::general_purpose::STANDARD as BASE64_ENGINE;
 use base64::Engine as _;
-mod control_plane;
-use control_plane::ControlPlaneClient;
+// Use the shared config-service library for config service functionality.
+use config_service_lib::ConfigServiceClient;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     init_tracing();
     let cfg = Arc::new(RwLock::new(Config::load(None)?));
     // Optionally start control-plane poller if env vars provided
-    if let (Ok(base), Ok(rid), Ok(pubkey_b64)) = (env::var("CONTROL_PLANE_URL"), env::var("ROUTER_ID"), env::var("CONTROL_PLANE_PUBKEY")) {
+    if let (Ok(base), Ok(rid), Ok(pubkey_b64)) = (env::var("CONFIG_SERVICE_URL"), env::var("OBJECT_ID"), env::var("CONFIG_SERVICE_PUBKEY")) {
         if let Ok(pk_bytes) = BASE64_ENGINE.decode(pubkey_b64.as_bytes()) {
             if let Ok(pubkey) = PublicKey::from_bytes(&pk_bytes) {
-                let cp = ControlPlaneClient::new(base, rid, pubkey);
-                let cp_cfg = cfg.clone();
+                // Construct shared ConfigServiceClient from the library and spawn its poll loop.
+                let cp = ConfigServiceClient::new(base.clone(), rid.clone(), pubkey);
+                // Start poll loop in background
+                let cp_for_poll = cp.clone();
                 tokio::spawn(async move {
-                    if let Err(e) = cp.poll_loop(cp_cfg).await {
+                    if let Err(e) = cp_for_poll.poll_loop().await {
                         tracing::error!(error=%e, "control plane poller failed");
                     }
                 });
-            } else { warn!("invalid CONTROL_PLANE_PUBKEY bytes"); }
-        } else { warn!("failed decoding CONTROL_PLANE_PUBKEY base64"); }
+                // Start a small task that periodically snapshots routes and merges into runtime cfg
+                let cp_for_merge = cp.clone();
+                let cfg_for_merge = cfg.clone();
+                tokio::spawn(async move {
+                    loop {
+                        let assigns = cp_for_merge.snapshot_assignments().await;
+                        // Build a fresh routes map from all assignment blobs, then
+                        // replace the runtime routes atomically. This ensures routes
+                        // removed from the assignments are removed from the router.
+                        let mut new_routes: HashMap<String, crate::config::BackendConfig> = HashMap::new();
+                        for (_tenant, a) in assigns.iter() {
+                            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&a.blob) {
+                                if let Some(routes) = v.get("routes").and_then(|r| r.as_object()) {
+                                    for (k, v) in routes {
+                                        if let Some(s) = v.as_str() {
+                                            new_routes.insert(k.to_ascii_lowercase(), crate::config::BackendConfig { address: s.to_string(), use_haproxy: false });
+                                        } else if let Some(obj) = v.as_object() {
+                                            if let Some(addr) = obj.get("address").and_then(|x| x.as_str()) {
+                                                let use_h = obj.get("use_haproxy").and_then(|x| x.as_bool()).unwrap_or(false);
+                                                new_routes.insert(k.to_ascii_lowercase(), crate::config::BackendConfig { address: addr.to_string(), use_haproxy: use_h });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        let mut cfg_w = cfg_for_merge.write().await;
+                        cfg_w.routes = new_routes;
+                        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                    }
+                });
+            } else { warn!("invalid CONFIG_SERVICE_PUBKEY bytes"); }
+        } else { warn!("failed decoding CONFIG_SERVICE_PUBKEY base64"); }
     }
     let listen_addr = cfg.read().await.listen.clone();
     let udp_client_map: Arc<RwLock<HashMap<IpAddr, String>>> = Arc::new(RwLock::new(HashMap::new()));
@@ -158,9 +191,9 @@ mod tests {
 
     #[test]
     fn test_route_default_used() {
-    let cfg = Config { listen: "0.0.0.0:0".into(), routes: HashMap::new(), default: Some(config::BackendConfig { address: "127.0.0.1:12345".into(), use_haproxy: false }) };
-    let b = route_backend("unknown.example", &cfg).map(|b| &b.address);
-    assert_eq!(b, Some(&"127.0.0.1:12345".to_string()));
+        let cfg = Config { listen: "0.0.0.0:0".into(), routes: HashMap::new(), default: Some(config::BackendConfig { address: "127.0.0.1:12345".into(), use_haproxy: false }) };
+        let b = route_backend("unknown.example", &cfg).map(|b| &b.address);
+        assert_eq!(b, Some(&"127.0.0.1:12345".to_string()));
     }
 
     #[test]
