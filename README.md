@@ -14,7 +14,7 @@ It inspects the initial handshake packet and reads the "server address" field th
 - Async I/O via Tokio
 - Structured logging via `tracing`
 - UDP packet forwarding for mods that may use it
-- Config synchronisation via Control Plane API (optional, see `control_plane` module)
+- WebSocket-based management API (optional, disabled by default)
 
 ## Getting Started
 
@@ -32,6 +32,10 @@ cargo run --release
 A backend can be a simple string (address) or a table with options.
 
 ```
+# Port for the management API to listen on (optional).
+management_port = 8080
+
+# Address the proxy listens on
 listen = "0.0.0.0:25565"
 
 # default can be simple or detailed
