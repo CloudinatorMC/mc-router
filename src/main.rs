@@ -50,8 +50,8 @@ async fn main() -> Result<()> {
     info!(%listen_addr, "listening");
 
     // Start management API if configured
-    if let Some(port) = state.read().await.config.management_port {
-        start_management_api(port, state.clone());
+    if let Some(management_listen) = &state.read().await.config.management_listen {
+        start_management_api(management_listen.to_string(), state.clone());
     }
 
     loop {
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn test_route_default_used() {
-        let cfg = Config { management_port: None, listen: "0.0.0.0:0".into(), routes: HashMap::new(), default: Some(config::BackendConfig { address: "127.0.0.1:12345".into(), use_haproxy: false }) };
+        let cfg = Config { management_listen: None, listen: "0.0.0.0:0".into(), routes: HashMap::new(), default: Some(config::BackendConfig { address: "127.0.0.1:12345".into(), use_haproxy: false }) };
         let b = route_backend("unknown.example", &cfg).map(|b| &b.address);
         assert_eq!(b, Some(&"127.0.0.1:12345".to_string()));
     }

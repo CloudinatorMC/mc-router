@@ -32,8 +32,8 @@ cargo run --release
 A backend can be a simple string (address) or a table with options.
 
 ```
-# Port for the management API to listen on (optional).
-management_port = 8080
+# Address for the management API to listen on (optional).
+management_listen = "0.0.0.0:8080"
 
 # Address the proxy listens on
 listen = "0.0.0.0:25565"

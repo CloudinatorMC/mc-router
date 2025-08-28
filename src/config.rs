@@ -3,7 +3,7 @@ use serde::Deserialize;
 use std::{collections::HashMap, fs, path::PathBuf};
 
 // Public canonical backend configuration after normalization.
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct BackendConfig {
     pub address: String,
     pub use_haproxy: bool,
@@ -11,7 +11,7 @@ pub struct BackendConfig {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
-    pub management_port: Option<u16>,
+    pub management_listen: Option<String>,
     pub listen: String,
     /// Map of route key (lowercased) to backend config
     pub routes: HashMap<String, BackendConfig>,
@@ -34,7 +34,7 @@ enum RawBackend {
 
 #[derive(Debug, Deserialize, Clone)]
 struct RawConfig {
-    management_port: Option<u16>,
+    management_listen: Option<String>,
     listen: String,
     routes: HashMap<String, RawBackend>,
     #[serde(default)]
@@ -62,6 +62,6 @@ impl Config {
             routes.insert(k.to_ascii_lowercase(), v.into());
         }
         let default = raw.default.map(|d| d.into());
-        Ok(Config { management_port: raw.management_port, listen: raw.listen, routes, default })
+        Ok(Config { management_listen: raw.management_listen, listen: raw.listen, routes, default })
     }
 }
