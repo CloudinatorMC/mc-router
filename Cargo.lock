@@ -287,11 +287,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "mc-protocol"
+version = "0.1.0"
+source = "git+https://github.com/CloudinatorMC/mc-protocol.git#c703d3d77f903f50c605379531612e0c26a804ef"
+dependencies = [
+ "anyhow",
+ "tokio",
+]
+
+[[package]]
 name = "mc-router"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "futures-util",
+ "mc-protocol",
  "serde",
  "serde_json",
  "tokio",

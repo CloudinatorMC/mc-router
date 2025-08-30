@@ -14,12 +14,11 @@ use tracing::{info, warn};
 
 mod config;
 mod management_api;
-mod protocol;
 mod routing;
 mod udp;
 
 use config::Config;
-use protocol::{parse_handshake_server_address, read_framed_packet};
+use mc_protocol::{parse_handshake_server_address, read_framed_packet};
 use routing::{route_backend, sanitize_address};
 use udp::spawn_udp_forwarder;
 use management_api::start_management_api;
@@ -147,7 +146,8 @@ async fn handle_client(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{routing::{route_backend, sanitize_address}, protocol::read_varint, config::Config};
+    use crate::{routing::{route_backend, sanitize_address}, config::Config};
+    use mc_protocol::read_varint;
 
     #[test]
     fn test_varint_roundtrip() {
